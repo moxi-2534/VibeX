@@ -197,8 +197,19 @@ impl NativeConfigProvider {
             paths.push(path);
         }
 
-        let api_key_present =
+        let mut api_key_present =
             vault_api_key_present || fields.iter().any(|field| field.secret && field.present);
+        let mut account_logged_in = account_logged_in;
+        if crate::AgentKind::Omp.matches_id(agent_id.as_str()) {
+            let presence = crate::omp_auth::credential_presence(&crate::omp_auth::agent_dir(
+                &self.home,
+                &self.environment,
+            ));
+            account_logged_in |= presence.account;
+            if presence.api_key {
+                api_key_present = true;
+            }
+        }
         Ok(NativeConfigSnapshot {
             agent_id: agent_id.clone(),
             path: paths.first().cloned().unwrap_or_else(|| self.home.clone()),

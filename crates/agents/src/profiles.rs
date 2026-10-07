@@ -2427,8 +2427,22 @@ const DEEPSEEK_HARNESS_SETTINGS: &[AgentSettingsFeature] = &[
     AgentSettingsFeature::DshPlugins,
     AgentSettingsFeature::NativeSkills,
 ];
-/// OMP authenticates inside its own provider vault (`omp login`). VibeX does
-/// not project that vault. Skills it owns live under `~/.omp/agent/skills`.
+/// Credentials live in `agent.db` and `models.yml`, not `auth.json`. ACP
+/// sessions take MCP from `session/new`, so this profile does not offer a
+/// native MCP file target.
+const OMP_CONFIG: &[NativeConfigBinding] = &[NativeConfigBinding {
+    binding_id: "config",
+    home_relative_path: ".omp/agent/config.yml",
+    directory_override_env: Some("PI_CODING_AGENT_DIR"),
+    override_relative_path: "config.yml",
+    format: NativeConfigFormat::Yaml,
+    fields: &[text_field(
+        "omp_default_model",
+        "默认模型",
+        "新会话使用的模型",
+        &["modelRoles", "default"],
+    )],
+}];
 const OMP_SETTINGS: &[AgentSettingsFeature] = &[AgentSettingsFeature::NativeSkills];
 /// MiMo Code is an OpenCode fork: Xiaomi OAuth is the official subscription,
 /// first-party keys live in `auth.json`, and catalog/custom endpoints use the
@@ -3217,12 +3231,10 @@ fn omp_profile() -> BuiltInProfile {
         dependencies: OMP_DEPENDENCIES,
         management_actions: OMP_ACTIONS,
         runtime_executable_env: None,
-        native_config: &[],
+        native_config: OMP_CONFIG,
         settings_features: OMP_SETTINGS,
-        // Credentials live in OMP's own vault. An empty auth.json is not proof
-        // the agent cannot start, so VibeX must not block launch on it.
-        authentication_precedence: AuthenticationPrecedence::SingleSource,
-        authentication_required_by_default: false,
+        authentication_precedence: AuthenticationPrecedence::AccountThenApiKey,
+        authentication_required_by_default: true,
         account_evidence: None,
     }
 }

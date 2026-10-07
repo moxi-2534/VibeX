@@ -268,9 +268,7 @@ pub fn default_history_sources(agent_type: AgentKind) -> Vec<AgentHistorySource>
                 ..source
             })
             .collect(),
-        // Session directories are workspace-encoded folders, not a confirmed
-        // transcript format. Do not point the generic jsonl importer at them.
-        AgentKind::Omp => Vec::new(),
+        AgentKind::Omp => omp_history_sources(agent_type),
         // In-process mock agent: no on-disk history to import.
         AgentKind::QaMock => Vec::new(),
     }
@@ -322,7 +320,12 @@ pub fn configured_history_sources(
             }
             AgentKind::Qoder => configured_root(configured_env, "QODER_CONFIG_DIR")
                 .map(|path| path.join("projects")),
-            AgentKind::Omp | AgentKind::QaMock => None,
+            AgentKind::Omp => configured_root(configured_env, "PI_CODING_AGENT_SESSION_DIR")
+                .or_else(|| {
+                    configured_root(configured_env, "PI_CODING_AGENT_DIR")
+                        .map(|path| path.join("sessions"))
+                }),
+            AgentKind::QaMock => None,
         }
         .into_iter()
         .collect::<Vec<_>>();
@@ -584,6 +587,36 @@ fn pi_history_sources_from(
     vec![AgentHistorySource { agent_type, path }]
 }
 
+fn omp_history_sources(agent_type: AgentKind) -> Vec<AgentHistorySource> {
+    if let Some(raw) = std::env::var_os("PI_CODING_AGENT_SESSION_DIR")
+        .filter(|value| !value.is_empty())
+        .and_then(|value| value.into_string().ok())
+    {
+        let path = match dirs::home_dir().as_deref() {
+            Some(home) => crate::pi_trust::expand_pi_home(&raw, home),
+            None => PathBuf::from(raw),
+        };
+        return vec![AgentHistorySource { agent_type, path }];
+    }
+    let agent_dir = match std::env::var_os("PI_CODING_AGENT_DIR")
+        .filter(|value| !value.is_empty())
+        .and_then(|value| value.into_string().ok())
+    {
+        Some(dir) => match dirs::home_dir().as_deref() {
+            Some(home) => crate::pi_trust::expand_pi_home(&dir, home),
+            None => PathBuf::from(dir),
+        },
+        None => match dirs::home_dir() {
+            Some(home) => home.join(".omp").join("agent"),
+            None => return Vec::new(),
+        },
+    };
+    vec![AgentHistorySource {
+        agent_type,
+        path: agent_dir.join("sessions"),
+    }]
+}
+
 /// Honor `settings.json` `sessionDir` only when it is absolute after tilde
 /// expansion. A relative value is resolved by Pi against the workspace cwd,
 /// which this scanner does not have.
@@ -767,6 +800,7 @@ pub(super) fn parse_history_file(
     ) {
         (AgentKind::DeepseekHarness, Some("jsonl")) => deepseek::parse_deepseek_history(path, &raw),
         (AgentKind::Pi, Some("jsonl")) => parse_pi_session(path, &raw),
+        (AgentKind::Omp, Some("jsonl")) => parse_omp_session(path, &raw),
         (
             AgentKind::ClaudeCode | AgentKind::Openclaw | AgentKind::Codebuddy | AgentKind::Qoder,
             Some("jsonl"),
@@ -1044,6 +1078,27 @@ fn parse_pi_session(
         })
         .into_iter()
         .collect())
+}
+
+fn parse_omp_session(
+    path: &Path,
+    raw: &str,
+) -> Result<Vec<ImportedAgentSession>, AgentHistoryError> {
+    let mut sessions = parse_pi_session(path, raw)?;
+    let values = parse_jsonl_values(path, raw)?;
+    let title = values.iter().find_map(|value| {
+        (value.get("type").and_then(serde_json::Value::as_str) == Some("title"))
+            .then(|| string_at_any(value, &["title"]))
+            .flatten()
+            .filter(|title| !title.trim().is_empty())
+    });
+    for session in &mut sessions {
+        session.source_agent = AgentKind::Omp;
+        if let Some(title) = title.clone() {
+            session.title = Some(title);
+        }
+    }
+    Ok(sessions)
 }
 
 fn parse_gemini_chat(
@@ -2535,12 +2590,40 @@ mod tests {
             AgentKind::Cursor,
             AgentKind::DeepseekHarness,
             AgentKind::Qoder,
+            AgentKind::Omp,
         ] {
             assert!(
                 !default_history_sources(agent_type).is_empty(),
                 "missing history source for {agent_type:?}"
             );
         }
+    }
+
+    #[test]
+    fn imports_omp_title_and_messages() {
+        let raw = concat!(
+            r#"{"type":"title","v":1,"title":"Investigate importer","updatedAt":"2026-10-07T08:16:57.574Z"}"#,
+            "\n",
+            r#"{"type":"session","version":3,"id":"01a1156f-e6e6-7712-811a-a66cb908610b","timestamp":"2026-10-07T08:16:57.574Z","cwd":"/repo"}"#,
+            "\n",
+            r#"{"type":"message","id":"u1","timestamp":"2026-10-07T08:17:00.000Z","message":{"role":"user","content":[{"type":"text","text":"Look at adapters"}]}}"#,
+            "\n",
+            r#"{"type":"message","id":"a1","timestamp":"2026-10-07T08:17:02.000Z","message":{"role":"assistant","content":[{"type":"text","text":"OMP is native ACP."}]}}"#,
+            "\n",
+        );
+        let sessions = parse_omp_session(std::path::Path::new("session.jsonl"), raw).unwrap();
+        assert_eq!(sessions.len(), 1);
+        assert_eq!(sessions[0].source_agent, AgentKind::Omp);
+        assert_eq!(
+            sessions[0].external_session_id,
+            "01a1156f-e6e6-7712-811a-a66cb908610b"
+        );
+        assert_eq!(sessions[0].title.as_deref(), Some("Investigate importer"));
+        assert_eq!(
+            sessions[0].workspace_path.as_deref(),
+            Some(std::path::Path::new("/repo"))
+        );
+        assert_eq!(sessions[0].messages.len(), 2);
     }
 
     #[test]
