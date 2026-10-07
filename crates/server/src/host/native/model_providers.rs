@@ -230,7 +230,7 @@ fn omp_provider_home(home: &Path, environment: &HashMap<String, String>) -> Path
         .iter()
         .map(|(key, value)| (key.clone(), value.clone()))
         .collect();
-    agents::omp_auth::agent_dir(home, &map)
+    agents::omp_agent_dir(home, &map)
 }
 
 pub async fn list(
