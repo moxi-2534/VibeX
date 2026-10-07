@@ -750,6 +750,11 @@ fn codeg_directory_semantics_and_settings_capabilities_are_profile_declared() {
             .contains(&AgentSettingsFeature::AuthenticationMode)
     );
     assert!(
+        profile("omp")
+            .settings_features
+            .contains(&AgentSettingsFeature::ReusableModelProviders)
+    );
+    assert!(
         profile("deepseek_harness")
             .settings_features
             .contains(&AgentSettingsFeature::DshPlugins)

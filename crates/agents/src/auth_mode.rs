@@ -205,7 +205,7 @@ const MIMO_CREDENTIAL_MODES: &[&str] = &["official_api"];
 const MIMO_SCRUB_ENV: &[&str] = &["MIMO_API_KEY", "OPENAI_API_KEY", "ANTHROPIC_API_KEY"];
 const PI_MODES: &[&str] = &["model_provider"];
 const OPENCLAW_MODES: &[&str] = &["model_provider"];
-const OMP_MODES: &[&str] = &["official_subscription"];
+const OMP_MODES: &[&str] = &["official_subscription", "model_provider"];
 
 pub fn auth_mode_kind(agent_id: &AgentId, mode: &str) -> AgentAuthModeKind {
     match (agent_id.as_str(), mode) {
@@ -1218,7 +1218,7 @@ mod tests {
         let omp = AgentId::parse("omp").unwrap();
         assert_eq!(
             built_in_auth_mode_policy(&omp).unwrap().modes,
-            ["official_subscription"]
+            ["official_subscription", "model_provider"]
         );
         assert_eq!(
             auth_mode_kind(&omp, "official_subscription"),

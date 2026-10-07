@@ -2436,15 +2436,37 @@ const OMP_CONFIG: &[NativeConfigBinding] = &[NativeConfigBinding {
     directory_override_env: Some("PI_CODING_AGENT_DIR"),
     override_relative_path: "config.yml",
     format: NativeConfigFormat::Yaml,
-    fields: &[text_field(
-        "omp_default_model",
-        "默认模型",
-        "新会话使用的模型",
-        &["modelRoles", "default"],
-    )],
+    fields: &[
+        text_field(
+            "omp_default_model",
+            "默认模型",
+            "新会话使用的模型",
+            &["modelRoles", "default"],
+        ),
+        select_field(
+            "omp_theme_dark",
+            "深色主题",
+            "深色模式下使用的主题",
+            &["theme", "dark"],
+            PI_THEME_OPTIONS,
+        ),
+        boolean_field(
+            "omp_compaction_enabled",
+            "自动压缩上下文",
+            "上下文接近上限时压缩历史",
+            &["compaction", "enabled"],
+        ),
+        number_field(
+            "omp_compaction_reserve_tokens",
+            "压缩预留 Token",
+            "为模型回复预留的 Token 数",
+            &["compaction", "reserveTokens"],
+        ),
+    ],
 }];
 const OMP_SETTINGS: &[AgentSettingsFeature] = &[
     AgentSettingsFeature::AuthenticationMode,
+    AgentSettingsFeature::ReusableModelProviders,
     AgentSettingsFeature::NativeSkills,
 ];
 /// MiMo Code is an OpenCode fork: Xiaomi OAuth is the official subscription,

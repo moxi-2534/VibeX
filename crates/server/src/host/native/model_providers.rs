@@ -133,6 +133,7 @@ struct ProviderNativeHomes {
     openclaw: PathBuf,
     cline: PathBuf,
     pi: PathBuf,
+    omp: PathBuf,
 }
 
 impl ProviderNativeHomes {
@@ -147,13 +148,14 @@ impl ProviderNativeHomes {
             openclaw: resolve_native_home(home, environment, "OPENCLAW_HOME", ".openclaw"),
             cline: resolve_native_home(home, environment, "CLINE_DIR", ".cline/data"),
             pi: resolve_native_home(home, environment, "PI_CODING_AGENT_DIR", ".pi/agent"),
+            omp: resolve_native_home(home, environment, "PI_CODING_AGENT_DIR", ".omp/agent"),
         }
     }
 
     fn native_list_home(&self, agent_id: &AgentId) -> &Path {
         match agent_id.as_str() {
             "pi" => &self.pi,
-            "claude_code" => &self.claude,
+            "omp" => &self.omp,
             "grok" => &self.grok,
             "kimi_code" => &self.kimi,
             "hermes" => &self.hermes,
@@ -271,6 +273,33 @@ pub async fn list_with_native(
                 write_store(store_path, &store).await?;
             }
             Ok(project_with_grok_native(&store, agent_id, native.as_ref()))
+        }
+        "omp" => {
+            let native = match native_home {
+                Some(home) => agents::omp_providers::read_state(home).await?,
+                None => agents::omp_providers::OmpNativeState {
+                    drafts: Vec::new(),
+                    active_provider: None,
+                },
+            };
+            let drafts = omp_native_drafts(&native);
+            let mut store = read_store(store_path).await?;
+            if adopt_native_providers(&mut store, &agent_id, &drafts) {
+                write_store(store_path, &store).await?;
+            }
+            let mut view = project(&store, agent_id);
+            if view.bound_provider_id.is_none() {
+                apply_native_active_binding(
+                    &mut view,
+                    native.active_provider.as_deref(),
+                    native
+                        .drafts
+                        .iter()
+                        .map(|draft| (draft.id.as_str(), draft.api_url.as_str())),
+                    None,
+                );
+            }
+            Ok(view)
         }
         _ => {
             let drafts = match native_home {
@@ -627,6 +656,9 @@ pub async fn delete(
         "codex" => remove_native_codex_provider(&homes.codex, &removed).await?,
         "pi" => remove_native_pi_provider(&homes.pi, &removed).await?,
         "grok" => remove_native_grok_provider(&homes.grok, &removed).await?,
+        "omp" => {
+            agents::omp_providers::remove(&homes.omp, &removed.id, &removed.name).await?;
+        }
         _ => {}
     }
     store.providers.remove(index);
@@ -855,6 +887,26 @@ async fn projected_view(
             }
             Ok(project_with_grok_native(&store, agent_id, Some(&native)))
         }
+        "omp" => {
+            let native = agents::omp_providers::read_state(&homes.omp).await?;
+            let drafts = omp_native_drafts(&native);
+            if adopt_native_providers(&mut store, &agent_id, &drafts) {
+                write_store(store_path, &store).await?;
+            }
+            let mut view = project(&store, agent_id);
+            if view.bound_provider_id.is_none() {
+                apply_native_active_binding(
+                    &mut view,
+                    native.active_provider.as_deref(),
+                    native
+                        .drafts
+                        .iter()
+                        .map(|draft| (draft.id.as_str(), draft.api_url.as_str())),
+                    None,
+                );
+            }
+            Ok(view)
+        }
         _ => {
             let home = homes.native_list_home(&agent_id);
             let drafts = live_native_drafts(&agent_id, home).await?;
@@ -965,6 +1017,7 @@ async fn live_native_drafts(
         "hermes" => native_hermes_draft(native_home).await?,
         "cline" => native_cline_draft(native_home).await?,
         "openclaw" => native_openclaw_drafts(native_home).await?,
+        "omp" => omp_import_drafts(native_home).await?,
         _ if is_antigravity(agent_id) => native_gemini_draft(native_home, agent_id)
             .await?
             .into_iter()
@@ -1836,6 +1889,7 @@ async fn native_import_drafts(
             }
         }
         "pi" => drafts.extend(native_pi_drafts(&homes.pi).await?),
+        "omp" => drafts.extend(omp_import_drafts(&homes.omp).await?),
         _ if is_antigravity(agent_id) => {
             if let Some(draft) = native_gemini_draft(&homes.gemini, agent_id).await? {
                 drafts.push(draft);
@@ -2312,6 +2366,37 @@ async fn native_openclaw_drafts(openclaw_home: &Path) -> Result<Vec<ImportDraft>
         .collect())
 }
 
+fn omp_native_drafts(native: &agents::omp_providers::OmpNativeState) -> Vec<NativeProviderDraft> {
+    native
+        .drafts
+        .iter()
+        .filter(|draft| !draft.api_url.is_empty())
+        .map(|draft| NativeProviderDraft {
+            id: draft.id.clone(),
+            name: draft.name.clone(),
+            api_url: draft.api_url.clone(),
+            api_key: draft.api_key.clone(),
+            model: draft.model.clone(),
+        })
+        .collect()
+}
+
+async fn omp_import_drafts(home: &Path) -> Result<Vec<ImportDraft>, String> {
+    let native = agents::omp_providers::read_state(home).await?;
+    Ok(native
+        .drafts
+        .into_iter()
+        .map(|draft| ImportDraft {
+            source_id: format!("native:{}", draft.id),
+            name: draft.name,
+            api_url: draft.api_url,
+            api_key: draft.api_key,
+            model: draft.model,
+            skip_reason: None,
+        })
+        .collect())
+}
+
 async fn native_pi_drafts(pi_home: &Path) -> Result<Vec<ImportDraft>, String> {
     let models = read_json_object_or_empty(&pi_home.join("models.json")).await?;
     let auth = read_json_object_or_empty(&pi_home.join("auth.json")).await?;
@@ -2622,6 +2707,10 @@ async fn capture_projection(
             capture_text_file(&homes.pi.join("models.json"), "models.json", &mut backup).await?;
             capture_text_file(&homes.pi.join("auth.json"), "auth.json", &mut backup).await?;
         }
+        "omp" => {
+            capture_text_file(&homes.omp.join("models.yml"), "models.yml", &mut backup).await?;
+            capture_text_file(&homes.omp.join("config.yml"), "config.yml", &mut backup).await?;
+        }
         _ => unreachable!("validated Agent"),
     }
     Ok(backup)
@@ -2660,9 +2749,10 @@ fn empty_projection_backup(agent_id: &AgentId) -> ProviderProjectionBackup {
     for key in match agent_id.as_str() {
         "kimi_code" => ["config.toml", "credentials/kimi-code.json"].as_slice(),
         "hermes" => ["config.yaml"].as_slice(),
-        "openclaw" => ["openclaw.json"].as_slice(),
-        "cline" => ["globalState.json", "secrets.json"].as_slice(),
         "pi" => ["settings.json", "models.json", "auth.json"].as_slice(),
+        "omp" => ["models.yml", "config.yml"].as_slice(),
+        "cline" => ["globalState.json", "secrets.json"].as_slice(),
+
         _ => [].as_slice(),
     } {
         backup.file_values.insert((*key).to_string(), None);
@@ -2914,6 +3004,10 @@ async fn restore_projection(
             restore_text_file(&homes.pi.join("models.json"), "models.json", backup, false).await?;
             restore_text_file(&homes.pi.join("auth.json"), "auth.json", backup, true).await
         }
+        "omp" => {
+            restore_text_file(&homes.omp.join("models.yml"), "models.yml", backup, true).await?;
+            restore_text_file(&homes.omp.join("config.yml"), "config.yml", backup, false).await
+        }
         _ => validate_agent(agent_id),
     }
 }
@@ -3123,6 +3217,18 @@ async fn apply_provider(
         "openclaw" => apply_openclaw(&homes.openclaw, provider).await,
         "cline" => apply_cline(&homes.cline, provider).await,
         "pi" => apply_pi(&homes.pi, provider).await,
+        "omp" => {
+            agents::omp_providers::apply(
+                &homes.omp,
+                &provider.id,
+                &provider.name,
+                &provider.api_url,
+                &provider.api_key,
+                &provider.model,
+            )
+            .await
+            .map_err(super::NativeError::from)
+        }
         _ if is_antigravity(&provider.agent_id) => apply_antigravity(&homes.gemini, provider).await,
         _ => validate_agent(&provider.agent_id),
     }
