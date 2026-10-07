@@ -178,6 +178,14 @@ pub fn built_in_auth_mode_policy(agent_id: &AgentId) -> Option<BuiltInAuthModePo
             subscription_scrub_env: MIMO_SCRUB_ENV,
             default_mode: "official_subscription",
         }),
+        "omp" => Some(BuiltInAuthModePolicy {
+            mode_env: "OMP_AUTH_MODE",
+            credential_env: "OMP_API_KEY",
+            modes: OMP_MODES,
+            credential_modes: &[],
+            subscription_scrub_env: &[],
+            default_mode: "official_subscription",
+        }),
         _ => None,
     }
 }
@@ -197,6 +205,7 @@ const MIMO_CREDENTIAL_MODES: &[&str] = &["official_api"];
 const MIMO_SCRUB_ENV: &[&str] = &["MIMO_API_KEY", "OPENAI_API_KEY", "ANTHROPIC_API_KEY"];
 const PI_MODES: &[&str] = &["model_provider"];
 const OPENCLAW_MODES: &[&str] = &["model_provider"];
+const OMP_MODES: &[&str] = &["official_subscription"];
 
 pub fn auth_mode_kind(agent_id: &AgentId, mode: &str) -> AgentAuthModeKind {
     match (agent_id.as_str(), mode) {
@@ -1205,6 +1214,16 @@ mod tests {
             AgentAuthModeKind::Subscription
         );
         assert_eq!(official_api_url(&qoder, "official_subscription"), None);
+
+        let omp = AgentId::parse("omp").unwrap();
+        assert_eq!(
+            built_in_auth_mode_policy(&omp).unwrap().modes,
+            ["official_subscription"]
+        );
+        assert_eq!(
+            auth_mode_kind(&omp, "official_subscription"),
+            AgentAuthModeKind::Subscription
+        );
 
         let mimo = AgentId::parse("mimo_code").unwrap();
         assert_eq!(

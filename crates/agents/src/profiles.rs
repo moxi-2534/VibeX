@@ -2443,7 +2443,10 @@ const OMP_CONFIG: &[NativeConfigBinding] = &[NativeConfigBinding {
         &["modelRoles", "default"],
     )],
 }];
-const OMP_SETTINGS: &[AgentSettingsFeature] = &[AgentSettingsFeature::NativeSkills];
+const OMP_SETTINGS: &[AgentSettingsFeature] = &[
+    AgentSettingsFeature::AuthenticationMode,
+    AgentSettingsFeature::NativeSkills,
+];
 /// MiMo Code is an OpenCode fork: Xiaomi OAuth is the official subscription,
 /// first-party keys live in `auth.json`, and catalog/custom endpoints use the
 /// same provider JSON as OpenCode. Plugins are the `plugin` array in

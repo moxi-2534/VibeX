@@ -745,6 +745,11 @@ fn codeg_directory_semantics_and_settings_capabilities_are_profile_declared() {
             .contains(&AgentSettingsFeature::AuthenticationMode)
     );
     assert!(
+        profile("omp")
+            .settings_features
+            .contains(&AgentSettingsFeature::AuthenticationMode)
+    );
+    assert!(
         profile("deepseek_harness")
             .settings_features
             .contains(&AgentSettingsFeature::DshPlugins)
@@ -808,7 +813,7 @@ fn codeg_directory_semantics_and_settings_capabilities_are_profile_declared() {
             "{id} must declare native MCP support"
         );
     }
-    for id in ["openclaw", "pi", "deepseek_harness"] {
+    for id in ["openclaw", "pi", "deepseek_harness", "omp"] {
         assert!(
             !profile(id)
                 .settings_features
