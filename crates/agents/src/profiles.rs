@@ -387,6 +387,7 @@ impl BuiltInProfileCatalog {
                 codebuddy_profile(),
                 kimi_code_profile(),
                 qoder_profile(),
+                omp_profile(),
             ],
         }
     }
@@ -520,6 +521,9 @@ const KIMI_CANDIDATES: &[ProfileExternalCandidate] = &[external("kimi")];
 const GROK_CANDIDATES: &[ProfileExternalCandidate] = &[external("grok")];
 const CURSOR_CANDIDATES: &[ProfileExternalCandidate] = &[external("cursor-agent")];
 const DEEPSEEK_HARNESS_CANDIDATES: &[ProfileExternalCandidate] = &[external("deepseek-acp")];
+/// `omp` without `acp` is the interactive TUI. The subcommand is the stdio server.
+const OMP_ACP_ARGS: &[&str] = &["acp"];
+const OMP_CANDIDATES: &[ProfileExternalCandidate] = &[external_acp("omp", OMP_ACP_ARGS)];
 /// Qoder CLI turns into an ACP stdio server with `--acp`; without it the same
 /// executable starts the interactive TUI. Both published executable names are
 /// probed because the official ACP guide uses `qoder` while the Model Studio
@@ -577,6 +581,11 @@ const UV_DEPENDENCIES: &[ProfileDependency] = &[
         "uv 将自动安装 Python 3.13",
         false,
     ),
+];
+const OMP_DEPENDENCIES: &[ProfileDependency] = &[
+    dependency("node", "Node.js", "node", &["--version"], ">=20", true),
+    dependency("npm", "npm", "npm", &["--version"], "随 Node.js 安装", true),
+    dependency("bun", "Bun", "bun", &["--version"], ">=1.3.14", true),
 ];
 const ARCHIVE_DEPENDENCIES: &[ProfileDependency] = &[dependency(
     "archive",
@@ -803,6 +812,13 @@ const DEEPSEEK_HARNESS_ACTIONS: &[ProfileManagementAction] = &[terminal_action(
     "把 DeepSeek API Key 写入本地凭据",
     ProfileManagementActionKind::Setup,
     &[program("deepseek-acp", &["--setup"])],
+)];
+const OMP_ACTIONS: &[ProfileManagementAction] = &[terminal_action(
+    "login",
+    "登录 OMP",
+    "在终端里为 OMP 登录模型供应商",
+    ProfileManagementActionKind::Login,
+    &[program("omp", &["login"])],
 )];
 
 const fn program(program: &'static str, args: &'static [&'static str]) -> ProfileManagementProgram {
@@ -2411,6 +2427,9 @@ const DEEPSEEK_HARNESS_SETTINGS: &[AgentSettingsFeature] = &[
     AgentSettingsFeature::DshPlugins,
     AgentSettingsFeature::NativeSkills,
 ];
+/// OMP authenticates inside its own provider vault (`omp login`). VibeX does
+/// not project that vault. Skills it owns live under `~/.omp/agent/skills`.
+const OMP_SETTINGS: &[AgentSettingsFeature] = &[AgentSettingsFeature::NativeSkills];
 /// MiMo Code is an OpenCode fork: Xiaomi OAuth is the official subscription,
 /// first-party keys live in `auth.json`, and catalog/custom endpoints use the
 /// same provider JSON as OpenCode. Plugins are the `plugin` array in
@@ -3169,6 +3188,42 @@ fn qoder_profile() -> BuiltInProfile {
             relative_file: "settings.json",
             kind: AccountEvidenceKind::NonEmptyStringAt(&["security", "auth", "selectedType"]),
         }),
+    }
+}
+
+fn omp_profile() -> BuiltInProfile {
+    BuiltInProfile {
+        agent_id: AgentId::parse("omp").expect("bundled AgentId"),
+        display_name: "OMP",
+        description: "oh-my-pi coding agent over its native ACP server",
+        icon: ProfileIcon {
+            light: "/agents/omp.svg",
+            dark: "/agents/omp.svg",
+        },
+        // Not an official ACP Registry id. Present so a later registry entry
+        // with this id binds to this profile instead of creating a second agent.
+        registry_binding: Some(ProfileRegistryBinding { registry_id: "omp" }),
+        topology: ProfileTopology::NativeAcp,
+        supported_platforms: DESKTOP_PLATFORMS,
+        install_sources: vec![native_npx(
+            "@oh-my-pi/pi-coding-agent",
+            "18.8.0",
+            "omp",
+            OMP_ACP_ARGS,
+            ">=20",
+            "sha512-i0m5z+sljos+Fb7GwKhtXimAbvZ3EOiulyN9RiDeVy0yl1UtNlErgp2O376EurT263rD7C/CAbVOp9EyK7saOQ==",
+        )],
+        external_candidates: OMP_CANDIDATES,
+        dependencies: OMP_DEPENDENCIES,
+        management_actions: OMP_ACTIONS,
+        runtime_executable_env: None,
+        native_config: &[],
+        settings_features: OMP_SETTINGS,
+        // Credentials live in OMP's own vault. An empty auth.json is not proof
+        // the agent cannot start, so VibeX must not block launch on it.
+        authentication_precedence: AuthenticationPrecedence::SingleSource,
+        authentication_required_by_default: false,
+        account_evidence: None,
     }
 }
 

@@ -84,7 +84,8 @@ pub fn skills_surface(agent_type: AgentKind) -> AgentSkillsSurface {
         | AgentKind::Grok
         | AgentKind::Cursor
         | AgentKind::DeepseekHarness
-        | AgentKind::Qoder => AgentSkillsSurface {
+        | AgentKind::Qoder
+        | AgentKind::Omp => AgentSkillsSurface {
             agent_type,
             strategy: AgentSkillsStrategy::Directory,
             global_supported: true,
@@ -106,7 +107,7 @@ pub fn skills_surface(agent_type: AgentKind) -> AgentSkillsSurface {
 }
 
 /// Every agent VibeX manages. Order is used for stable scan/display output.
-const ALL_AGENTS: [AgentKind; 14] = [
+const ALL_AGENTS: [AgentKind; 15] = [
     AgentKind::ClaudeCode,
     AgentKind::Codex,
     AgentKind::Antigravity,
@@ -121,6 +122,7 @@ const ALL_AGENTS: [AgentKind; 14] = [
     AgentKind::Cursor,
     AgentKind::DeepseekHarness,
     AgentKind::Qoder,
+    AgentKind::Omp,
 ];
 
 pub fn skill_capable_agent_ids() -> Vec<String> {
@@ -387,6 +389,13 @@ fn skill_dirs(agent: AgentKind, workspace: Option<&Path>) -> Vec<SkillDir> {
         .into_iter()
         .map(|dir| (dir.join("skills"), false))
         .collect(),
+        AgentKind::Omp => configured_dir(
+            "PI_CODING_AGENT_DIR",
+            home.as_ref().map(|home| home.join(".omp").join("agent")),
+        )
+        .into_iter()
+        .map(|dir| (dir.join("skills"), false))
+        .collect(),
         // In-process mock agent: no skill directories.
         AgentKind::QaMock => Vec::new(),
     };
@@ -420,6 +429,7 @@ fn skill_dirs(agent: AgentKind, workspace: Option<&Path>) -> Vec<SkillDir> {
             AgentKind::Cursor => &[".cursor/skills", ".agents/skills"],
             AgentKind::DeepseekHarness => &[".dsh/skills", ".agents/skills"],
             AgentKind::Qoder => &[".qoder/skills"],
+            AgentKind::Omp => &[".agents/skills"],
             AgentKind::QaMock => &[],
         };
         for relative in relatives {
@@ -1020,6 +1030,11 @@ fn agent_primary_skill_dir(agent: AgentKind) -> Option<PathBuf> {
             configured_dir("QODER_CONFIG_DIR", home.map(|home| home.join(".qoder")))
                 .map(|dir| dir.join("skills"))
         }
+        AgentKind::Omp => configured_dir(
+            "PI_CODING_AGENT_DIR",
+            home.map(|home| home.join(".omp").join("agent")),
+        )
+        .map(|dir| dir.join("skills")),
         AgentKind::QaMock => None,
     }
 }

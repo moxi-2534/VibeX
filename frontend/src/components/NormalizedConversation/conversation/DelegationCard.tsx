@@ -295,6 +295,7 @@ const AGENT_LABELS: Record<string, string> = {
   grok: 'Grok',
   cursor: 'Cursor',
   deepseek_harness: 'DeepSeek Harness',
+  omp: 'OMP',
   qa_mock: 'QA Mock',
 };
 

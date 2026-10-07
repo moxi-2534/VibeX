@@ -268,6 +268,9 @@ pub fn default_history_sources(agent_type: AgentKind) -> Vec<AgentHistorySource>
                 ..source
             })
             .collect(),
+        // Session directories are workspace-encoded folders, not a confirmed
+        // transcript format. Do not point the generic jsonl importer at them.
+        AgentKind::Omp => Vec::new(),
         // In-process mock agent: no on-disk history to import.
         AgentKind::QaMock => Vec::new(),
     }
@@ -319,7 +322,7 @@ pub fn configured_history_sources(
             }
             AgentKind::Qoder => configured_root(configured_env, "QODER_CONFIG_DIR")
                 .map(|path| path.join("projects")),
-            AgentKind::QaMock => None,
+            AgentKind::Omp | AgentKind::QaMock => None,
         }
         .into_iter()
         .collect::<Vec<_>>();

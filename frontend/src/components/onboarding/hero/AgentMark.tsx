@@ -200,6 +200,17 @@ export function AgentMark({ id, title }: { id: string; title?: string }) {
           />
         </svg>
       );
+    case 'omp':
+      return (
+        <svg viewBox="0 0 16 16" className="h-full w-full" aria-hidden={!title}>
+          {title ? <title>{title}</title> : null}
+          <path
+            fill="currentColor"
+            d="M1.5 3.2h2.1l2.4 6.3 2.4-6.3h2.1L6.9 12.8H5.1L1.5 3.2Z"
+          />
+          <path fill="currentColor" d="M9.2 3.2h1.8v7.4h3.5v1.8H9.2V3.2Z" />
+        </svg>
+      );
     case 'copilot':
       return (
         <svg viewBox="0 0 24 24" className="h-full w-full" aria-hidden={!title}>
