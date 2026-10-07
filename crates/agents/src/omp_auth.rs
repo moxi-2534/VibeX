@@ -21,22 +21,20 @@ impl OmpCredentialPresence {
 }
 
 pub fn agent_dir(home: &Path, environment: &BTreeMap<String, String>) -> PathBuf {
-    if let Some(dir) = environment
+    let explicit = environment
         .get("PI_CODING_AGENT_DIR")
         .map(String::as_str)
         .map(str::trim)
         .filter(|value| !value.is_empty())
-    {
-        return crate::pi_trust::expand_pi_home(dir, home);
+        .map(|value| crate::pi_trust::expand_pi_home(value, home));
+    match explicit {
+        Some(dir) if !is_pi_agent_dir(home, &dir) => dir,
+        _ => home.join(".omp").join("agent"),
     }
-    if let Some(dir) = std::env::var("PI_CODING_AGENT_DIR")
-        .ok()
-        .map(|value| value.trim().to_string())
-        .filter(|value| !value.is_empty())
-    {
-        return crate::pi_trust::expand_pi_home(&dir, home);
-    }
-    home.join(".omp").join("agent")
+}
+
+fn is_pi_agent_dir(home: &Path, dir: &Path) -> bool {
+    dir == home.join(".pi").join("agent")
 }
 
 pub fn credential_presence(agent_dir: &Path) -> OmpCredentialPresence {
@@ -129,5 +127,23 @@ mod tests {
         let presence = credential_presence(temp.path());
         assert!(!presence.account);
         assert!(presence.api_key);
+    }
+
+    #[test]
+    fn agent_dir_ignores_pi_home_and_process_env() {
+        let home = Path::new("/tmp/vibex-home");
+        let pi = home.join(".pi").join("agent");
+        let mut env = BTreeMap::from([(
+            "PI_CODING_AGENT_DIR".to_string(),
+            pi.to_string_lossy().into_owned(),
+        )]);
+        assert_eq!(agent_dir(home, &env), home.join(".omp").join("agent"));
+        env.insert(
+            "PI_CODING_AGENT_DIR".to_string(),
+            "/tmp/custom-omp".to_string(),
+        );
+        assert_eq!(agent_dir(home, &env), PathBuf::from("/tmp/custom-omp"));
+        env.clear();
+        assert_eq!(agent_dir(home, &env), home.join(".omp").join("agent"));
     }
 }

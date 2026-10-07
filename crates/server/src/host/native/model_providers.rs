@@ -148,7 +148,7 @@ impl ProviderNativeHomes {
             openclaw: resolve_native_home(home, environment, "OPENCLAW_HOME", ".openclaw"),
             cline: resolve_native_home(home, environment, "CLINE_DIR", ".cline/data"),
             pi: resolve_native_home(home, environment, "PI_CODING_AGENT_DIR", ".pi/agent"),
-            omp: resolve_native_home(home, environment, "PI_CODING_AGENT_DIR", ".omp/agent"),
+            omp: omp_provider_home(home, environment),
         }
     }
 
@@ -223,6 +223,14 @@ fn resolve_native_home(
                 .map(|value| super::expand_agent_home_path(home, &value.to_string_lossy()))
         })
         .unwrap_or_else(|| home.join(fallback))
+}
+
+fn omp_provider_home(home: &Path, environment: &HashMap<String, String>) -> PathBuf {
+    let map = environment
+        .iter()
+        .map(|(key, value)| (key.clone(), value.clone()))
+        .collect();
+    agents::omp_auth::agent_dir(home, &map)
 }
 
 pub async fn list(
@@ -3227,18 +3235,16 @@ async fn apply_provider(
         "openclaw" => apply_openclaw(&homes.openclaw, provider).await,
         "cline" => apply_cline(&homes.cline, provider).await,
         "pi" => apply_pi(&homes.pi, provider).await,
-        "omp" => {
-            agents::omp_providers::apply(
-                &homes.omp,
-                &provider.id,
-                &provider.name,
-                &provider.api_url,
-                &provider.api_key,
-                &provider.model,
-            )
-            .await
-            .map_err(super::NativeError::from)
-        }
+        "omp" => agents::omp_providers::apply(
+            &homes.omp,
+            &provider.id,
+            &provider.name,
+            &provider.api_url,
+            &provider.api_key,
+            &provider.model,
+        )
+        .await
+        .map_err(super::NativeError::from),
         _ if is_antigravity(&provider.agent_id) => apply_antigravity(&homes.gemini, provider).await,
         _ => validate_agent(&provider.agent_id),
     }
