@@ -425,6 +425,9 @@ impl NativeConfigProvider {
     }
 
     fn binding_path(&self, binding: &NativeConfigBinding) -> PathBuf {
+        if binding.home_relative_path == ".omp/agent/config.yml" {
+            return omp_config_path(&self.home, &self.environment);
+        }
         if let Some(path) = crate::metadata::mimo_native_binding_path(
             binding.binding_id,
             &self.home,
@@ -450,6 +453,16 @@ impl NativeConfigProvider {
             .map(|directory| directory.join(binding.override_relative_path))
             .unwrap_or_else(|| self.home.join(binding.home_relative_path))
     }
+}
+
+fn omp_config_path(home: &Path, environment: &BTreeMap<String, String>) -> PathBuf {
+    let mut environment = environment.clone();
+    if let Ok(value) = std::env::var("PI_CODING_AGENT_DIR") {
+        environment
+            .entry("PI_CODING_AGENT_DIR".to_string())
+            .or_insert(value);
+    }
+    crate::omp_auth::agent_dir(home, &environment).join("config.yml")
 }
 
 fn expand_home_path(home: &std::path::Path, path: PathBuf) -> PathBuf {
@@ -1626,5 +1639,23 @@ fn authentication_status(
             AuthenticationPrecedence::ApiKeyThenAccount => AgentAuthenticationStatus::ApiKey,
             AuthenticationPrecedence::SingleSource => AgentAuthenticationStatus::MultipleUnknown,
         },
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn omp_config_path_ignores_pi_agent_dir() {
+        let home = Path::new("/tmp/vibex-home");
+        let environment = BTreeMap::from([(
+            "PI_CODING_AGENT_DIR".to_string(),
+            home.join(".pi").join("agent").to_string_lossy().into_owned(),
+        )]);
+        assert_eq!(
+            omp_config_path(home, &environment),
+            home.join(".omp").join("agent").join("config.yml")
+        );
     }
 }

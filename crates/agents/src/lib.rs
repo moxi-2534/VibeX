@@ -46,6 +46,7 @@ pub mod metadata;
 pub mod native_config;
 pub mod npm_registry;
 mod omp_auth;
+mod omp_mcp;
 pub mod omp_providers;
 pub mod operations;
 pub mod parsers;

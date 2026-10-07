@@ -667,6 +667,7 @@ fn apply_omp_native_launch_env(env: &mut HashMap<String, String>) {
     env.remove("PI_ACP_ENABLE_EMBEDDED_CONTEXT");
     env.remove("PI_ACP_ENABLE_EXTENSION_COMMANDS");
     env.remove("PI_ACP_PI_COMMAND");
+    env.remove("PI_CODING_AGENT_SESSION_DIR");
 }
 
 /// Point `pi-acp` at a spawnable `pi` command.
@@ -954,6 +955,15 @@ mod tests {
                 "PI_ACP_ENABLE_EMBEDDED_CONTEXT".to_string(),
                 "true".to_string(),
             ),
+            (
+                "PI_CODING_AGENT_SESSION_DIR".to_string(),
+                omp_home
+                    .join(".pi")
+                    .join("agent")
+                    .join("sessions")
+                    .to_string_lossy()
+                    .into_owned(),
+            ),
         ]);
         apply_built_in_launch_policy(&AgentId::parse("omp").unwrap(), &mut omp, &mut Vec::new());
         assert_eq!(
@@ -967,6 +977,7 @@ mod tests {
             )
         );
         assert!(!omp.contains_key("PI_ACP_ENABLE_EMBEDDED_CONTEXT"));
+        assert!(!omp.contains_key("PI_CODING_AGENT_SESSION_DIR"));
 
         let mut pi = HashMap::from([(
             "HOME".to_string(),

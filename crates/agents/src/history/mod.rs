@@ -320,11 +320,7 @@ pub fn configured_history_sources(
             }
             AgentKind::Qoder => configured_root(configured_env, "QODER_CONFIG_DIR")
                 .map(|path| path.join("projects")),
-            AgentKind::Omp => configured_root(configured_env, "PI_CODING_AGENT_SESSION_DIR")
-                .or_else(|| {
-                    configured_root(configured_env, "PI_CODING_AGENT_DIR")
-                        .map(|path| path.join("sessions"))
-                }),
+            AgentKind::Omp => omp_sessions_dir(configured_env),
             AgentKind::QaMock => None,
         }
         .into_iter()
@@ -588,33 +584,33 @@ fn pi_history_sources_from(
 }
 
 fn omp_history_sources(agent_type: AgentKind) -> Vec<AgentHistorySource> {
-    if let Some(raw) = std::env::var_os("PI_CODING_AGENT_SESSION_DIR")
-        .filter(|value| !value.is_empty())
-        .and_then(|value| value.into_string().ok())
-    {
-        let path = match dirs::home_dir().as_deref() {
-            Some(home) => crate::pi_trust::expand_pi_home(&raw, home),
-            None => PathBuf::from(raw),
-        };
-        return vec![AgentHistorySource { agent_type, path }];
+    let mut environment = HashMap::new();
+    if let Ok(value) = std::env::var("HOME") {
+        environment.insert("HOME".to_string(), value);
     }
-    let agent_dir = match std::env::var_os("PI_CODING_AGENT_DIR")
-        .filter(|value| !value.is_empty())
-        .and_then(|value| value.into_string().ok())
-    {
-        Some(dir) => match dirs::home_dir().as_deref() {
-            Some(home) => crate::pi_trust::expand_pi_home(&dir, home),
-            None => PathBuf::from(dir),
-        },
-        None => match dirs::home_dir() {
-            Some(home) => home.join(".omp").join("agent"),
-            None => return Vec::new(),
-        },
+    if let Ok(value) = std::env::var("USERPROFILE") {
+        environment.insert("USERPROFILE".to_string(), value);
+    }
+    if let Ok(value) = std::env::var("PI_CODING_AGENT_DIR") {
+        environment.insert("PI_CODING_AGENT_DIR".to_string(), value);
+    }
+    let Some(path) = omp_sessions_dir(&environment) else {
+        return Vec::new();
     };
-    vec![AgentHistorySource {
-        agent_type,
-        path: agent_dir.join("sessions"),
-    }]
+    vec![AgentHistorySource { agent_type, path }]
+}
+
+fn omp_sessions_dir(environment: &HashMap<String, String>) -> Option<PathBuf> {
+    let home = environment
+        .get("HOME")
+        .or_else(|| environment.get("USERPROFILE"))
+        .map(PathBuf::from)
+        .or_else(dirs::home_dir)?;
+    let map = environment
+        .iter()
+        .map(|(key, value)| (key.clone(), value.clone()))
+        .collect();
+    Some(crate::omp_agent_dir(&home, &map).join("sessions"))
 }
 
 /// Honor `settings.json` `sessionDir` only when it is absolute after tilde
@@ -2714,6 +2710,36 @@ mod tests {
         assert_eq!(
             sources.first().map(|source| source.path.clone()),
             Some(expected)
+        );
+    }
+
+    #[test]
+    fn omp_history_ignores_a_pi_agent_dir() {
+        let home = PathBuf::from("/tmp/vibex-home");
+        let sources = configured_history_sources(
+            AgentKind::Omp,
+            &HashMap::from([
+                ("HOME".to_string(), home.to_string_lossy().into_owned()),
+                (
+                    "PI_CODING_AGENT_DIR".to_string(),
+                    home.join(".pi")
+                        .join("agent")
+                        .to_string_lossy()
+                        .into_owned(),
+                ),
+                (
+                    "PI_CODING_AGENT_SESSION_DIR".to_string(),
+                    home.join(".pi")
+                        .join("agent")
+                        .join("sessions")
+                        .to_string_lossy()
+                        .into_owned(),
+                ),
+            ]),
+        );
+        assert_eq!(
+            sources.first().map(|source| source.path.clone()),
+            Some(home.join(".omp").join("agent").join("sessions"))
         );
     }
 

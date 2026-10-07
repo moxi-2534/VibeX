@@ -2428,8 +2428,8 @@ const DEEPSEEK_HARNESS_SETTINGS: &[AgentSettingsFeature] = &[
     AgentSettingsFeature::NativeSkills,
 ];
 /// Credentials live in `agent.db` and `models.yml`, not `auth.json`. ACP
-/// sessions take MCP from `session/new`, so this profile does not offer a
-/// native MCP file target.
+/// sessions do not discover disk MCP, so assignments saved to
+/// `~/.omp/agent/mcp.json` are injected on `session/new`.
 const OMP_CONFIG: &[NativeConfigBinding] = &[NativeConfigBinding {
     binding_id: "config",
     home_relative_path: ".omp/agent/config.yml",
@@ -2467,6 +2467,7 @@ const OMP_CONFIG: &[NativeConfigBinding] = &[NativeConfigBinding {
 const OMP_SETTINGS: &[AgentSettingsFeature] = &[
     AgentSettingsFeature::AuthenticationMode,
     AgentSettingsFeature::ReusableModelProviders,
+    AgentSettingsFeature::NativeMcp,
     AgentSettingsFeature::NativeSkills,
 ];
 /// MiMo Code is an OpenCode fork: Xiaomi OAuth is the official subscription,

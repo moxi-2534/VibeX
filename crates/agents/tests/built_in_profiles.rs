@@ -810,6 +810,7 @@ fn codeg_directory_semantics_and_settings_capabilities_are_profile_declared() {
         "grok",
         "cursor",
         "qoder",
+        "omp",
     ] {
         assert!(
             profile(id)
@@ -818,7 +819,7 @@ fn codeg_directory_semantics_and_settings_capabilities_are_profile_declared() {
             "{id} must declare native MCP support"
         );
     }
-    for id in ["openclaw", "pi", "deepseek_harness", "omp"] {
+    for id in ["openclaw", "pi", "deepseek_harness"] {
         assert!(
             !profile(id)
                 .settings_features
