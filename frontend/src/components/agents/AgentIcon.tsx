@@ -67,7 +67,7 @@ const BUILT_IN_ICON_PATHS: Partial<
     dark: '/agents/deepseek-harness-dark.svg',
   },
   qoder: { light: '/agents/qoder.svg', dark: '/agents/qoder.svg' },
-  omp: { light: '/agents/omp.svg', dark: '/agents/omp.svg' },
+  omp: { light: '/agents/omp-light.svg', dark: '/agents/omp-dark.svg' },
   mimo_code: {
     light: '/agents/mimo-code-light.svg',
     dark: '/agents/mimo-code-dark.svg',

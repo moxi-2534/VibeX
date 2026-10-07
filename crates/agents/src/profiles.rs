@@ -3236,8 +3236,8 @@ fn omp_profile() -> BuiltInProfile {
         display_name: "OMP",
         description: "oh-my-pi coding agent over its native ACP server",
         icon: ProfileIcon {
-            light: "/agents/omp.svg",
-            dark: "/agents/omp.svg",
+            light: "/agents/omp-light.svg",
+            dark: "/agents/omp-dark.svg",
         },
         // Not an official ACP Registry id. Present so a later registry entry
         // with this id binds to this profile instead of creating a second agent.
