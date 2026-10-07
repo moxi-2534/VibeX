@@ -56,6 +56,21 @@ pub fn resolve_observed_authentication(
     )
 }
 
+/// OMP's `agent.db` oauth row is the live account, not leftover `auth.json`.
+/// A default signed-out probe must not hide a login that happened outside VibeX.
+pub fn omp_live_account(
+    recorded: AgentAuthenticationStatus,
+    native: AgentAuthenticationStatus,
+    bound_with_credential: bool,
+) -> AgentAuthenticationStatus {
+    if recorded == AgentAuthenticationStatus::NotLoggedIn
+        && native == AgentAuthenticationStatus::Account
+    {
+        return AgentAuthenticationStatus::Account;
+    }
+    resolve_observed_authentication(recorded, native, bound_with_credential)
+}
+
 /// Map a finished official login/logout command to the recorded session status.
 pub fn authentication_from_account_command(
     kind: ProfileManagementActionKind,
@@ -341,6 +356,26 @@ mod tests {
         assert_eq!(
             account_session_from_http(200, r#"{"id":"user"}"#),
             AccountSessionConfirmation::Confirmed
+        );
+    }
+
+    #[test]
+    fn omp_oauth_outside_vibex_counts_as_signed_in() {
+        assert_eq!(
+            omp_live_account(
+                AgentAuthenticationStatus::NotLoggedIn,
+                AgentAuthenticationStatus::Account,
+                false,
+            ),
+            AgentAuthenticationStatus::Account
+        );
+        assert_eq!(
+            resolve_observed_authentication(
+                AgentAuthenticationStatus::NotLoggedIn,
+                AgentAuthenticationStatus::Account,
+                false,
+            ),
+            AgentAuthenticationStatus::NotLoggedIn
         );
     }
 

@@ -1619,6 +1619,13 @@ async fn observed_authentication(
         Err(agents::NativeConfigError::Unsupported(_)) => AgentAuthenticationStatus::NotRequired,
         Err(_) => recorded,
     };
+    if agent_id.as_str() == "omp" {
+        return agents::omp_live_account(
+            recorded,
+            native,
+            bound_provider_has_credentials(agent_id, env).await,
+        );
+    }
     resolve_observed_authentication(
         recorded,
         native,

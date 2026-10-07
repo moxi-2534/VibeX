@@ -570,6 +570,11 @@ pub async fn bind(
             .and_then(|state| state.active_provider.as_deref())
             .is_some_and(|id| !id.is_empty());
         if current_binding.is_none() && !native_grok_active {
+            if agent_id.as_str() == "omp" {
+                agents::omp_providers::clear_active_role(&homes.omp)
+                    .await
+                    .map_err(super::NativeError::from)?;
+            }
             return projected_view(&store, store_path, &homes, agent_id).await;
         }
         let backup = store
@@ -578,6 +583,11 @@ pub async fn bind(
             .cloned()
             .unwrap_or_else(|| empty_projection_backup(&agent_id));
         restore_projection(&homes, &agent_id, &backup).await?;
+        if agent_id.as_str() == "omp" {
+            agents::omp_providers::clear_active_role(&homes.omp)
+                .await
+                .map_err(super::NativeError::from)?;
+        }
         store.bindings.remove(agent_id.as_str());
         store.projection_backups.remove(agent_id.as_str());
     }

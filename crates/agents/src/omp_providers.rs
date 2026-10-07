@@ -109,6 +109,28 @@ pub async fn apply(
         .map_err(|error| error.to_string())
 }
 
+pub async fn clear_active_role(agent_dir: &Path) -> Result<(), String> {
+    let config_path = agent_dir.join("config.yml");
+    let filesystem = TokioNativeFileSystem;
+    let original = filesystem
+        .read(&config_path)
+        .await
+        .map_err(|error| error.to_string())?;
+    let mut config = mapping_from(original.as_deref(), &config_path)?;
+    let Some(roles) = config
+        .get_mut(Value::String("modelRoles".to_string()))
+        .and_then(Value::as_mapping_mut)
+    else {
+        return Ok(());
+    };
+    if roles.remove(Value::String("default".to_string())).is_none() {
+        return Ok(());
+    }
+    filesystem
+        .apply_many_atomic(&[yaml_mutation(&config_path, original, &config, false)?])
+        .await
+        .map_err(|error| error.to_string())
+}
 pub async fn remove(agent_dir: &Path, provider_id: &str, name: &str) -> Result<(), String> {
     let models_path = agent_dir.join("models.yml");
     let config_path = agent_dir.join("config.yml");
@@ -436,5 +458,38 @@ mod tests {
         assert_eq!(state.drafts.len(), 1);
         assert_eq!(state.drafts[0].id, "local-gate");
         assert_eq!(state.active_provider, None);
+    }
+
+    #[tokio::test]
+    async fn clear_active_role_keeps_other_roles_and_providers() {
+        let temp = tempfile::tempdir().unwrap();
+        let agent_dir = temp.path();
+        apply(
+            agent_dir,
+            "provider-1",
+            "Local Gate",
+            "http://localhost:11434/v1",
+            "sk-local",
+            "glm-5",
+        )
+        .await
+        .unwrap();
+        tokio::fs::write(
+            agent_dir.join("config.yml"),
+            "theme:\n  dark: dark\nmodelRoles:\n  default: local-gate/glm-5\n  plan: kept/old\n",
+        )
+        .await
+        .unwrap();
+
+        clear_active_role(agent_dir).await.unwrap();
+
+        let state = read_state(agent_dir).await.unwrap();
+        assert_eq!(state.active_provider, None);
+        assert_eq!(state.drafts.len(), 1);
+        let config = tokio::fs::read_to_string(agent_dir.join("config.yml"))
+            .await
+            .unwrap();
+        assert!(config.contains("plan:"));
+        assert!(!config.contains("local-gate/glm-5"));
     }
 }
